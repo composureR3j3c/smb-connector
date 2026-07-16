@@ -122,7 +122,7 @@ class _SmbTestPageState extends State<SmbTestPage> {
 
   final passwordController = TextEditingController(text: "");
   final directoryController = TextEditingController(
-    text: "/storage/emulated/0/Download",
+    text: "/storage/emulated/0/DCIM/CamScanner",
   );
 
   final Set<String> uploadedFiles = {};
