@@ -7,6 +7,8 @@ import 'package:smb_connect_java/util/DirectoryPoller.dart';
 // import 'package:file_selector/file_selector.dart';
 // import 'package:photo_manager/photo_manager.dart';
 
+
+
 void main() {
   runApp(const MyApp());
 }
@@ -37,6 +39,7 @@ class _SmbTestPageState extends State<SmbTestPage> {
   @override
   void initState() {
     super.initState();
+    
 
     poller = DirectoryPoller(directory: "/storage/emulated/0/Download");
     
