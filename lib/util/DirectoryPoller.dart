@@ -75,6 +75,7 @@ class DirectoryPoller {
 
       if (_knownFiles.contains(entity.path)) continue;
       print("New file detected: ${entity.path}");
+      
 
       _knownFiles.add(entity.path);
 
