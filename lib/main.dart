@@ -13,9 +13,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-       debugShowCheckedModeBanner: false,
-      home: SmbTestPage(),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: const SmbTestPage(),
     );
   }
 }
@@ -28,11 +28,14 @@ class SmbTestPage extends StatefulWidget {
 }
 
 class _SmbTestPageState extends State<SmbTestPage> {
+
   SmbConnect? smb;
-  bool connected = false;
+
   late DirectoryPoller poller;
 
   String status = "Disconnected";
+
+  final Set<String> uploadedFiles = {};
 
   @override
   void initState() {
@@ -44,164 +47,358 @@ class _SmbTestPageState extends State<SmbTestPage> {
       directory: "/storage/emulated/0/Download",
     );
 
-    poller.start((file) async {
-      print("==================================");
-      print("NEW FILE DETECTED");
-      print(file.path);
-      print("==================================");
 
-      await Future.delayed(const Duration(seconds: 2));
+    poller.start((file) async {
+
+      if (uploadedFiles.contains(file.path)) {
+        return;
+      }
+
+      uploadedFiles.add(file.path);
+
+      print("New file detected: ${file.path}");
+
+      // wait until file writing completes
+      await Future.delayed(
+        const Duration(seconds: 2),
+      );
 
       await uploadFile(file);
+
     });
   }
 
+
   @override
   void dispose() {
+
     poller.stop();
+
     super.dispose();
+
   }
+
+
 
   Future<void> connect() async {
-    if (connected) return;
 
     try {
-      print("Connecting...");
+
+      print("Connecting SMB...");
+
 
       smb = await SmbConnect.connectAuth(
+
         host: "10.5.32.70",
+
         domain: "",
+
         username: "YOUR_WINDOWS_USERNAME",
+
         password: "YOUR_WINDOWS_PASSWORD",
+
       );
 
-      connected = true;
 
-      print("Connected.");
+      print("SMB connected");
 
-      final shares = await smb!.listShares();
-
-      print("Available Shares:");
-
-      for (final s in shares) {
-        print(s.path);
-      }
 
       setState(() {
+
         status = "Connected";
+
       });
-    } catch (e, s) {
-      print(e);
-      print(s);
+
+
+    } catch(e) {
+
+
+      print("SMB connection failed: $e");
+
+
+      smb = null;
+
 
       setState(() {
-        status = "Connection Failed";
+
+        status = "Disconnected";
+
       });
+
     }
+
   }
 
-  Future<void> uploadFile(File localFile) async {
+
+
+
+
+  Future<bool> isConnected() async {
+
+
     try {
-      print("========== UPLOAD ==========");
 
-      if (!connected || smb == null) {
-        print("Not connected.");
-        return;
+
+      if (smb == null) {
+
+        return false;
+
       }
 
-      print("Local File : ${localFile.path}");
 
-      bool exists = await localFile.exists();
+      await smb!.listShares();
 
-      print("Exists : $exists");
 
-      if (!exists) {
-        return;
+      return true;
+
+
+    } catch(e) {
+
+
+      print("Connection lost: $e");
+
+
+      smb = null;
+
+
+      return false;
+
+
+    }
+
+  }
+
+
+
+
+
+  Future<void> uploadFile(File localFile) async {
+
+
+    try {
+
+
+      bool alive = await isConnected();
+
+
+
+      if (!alive) {
+
+
+        print("SMB disconnected. Reconnecting...");
+
+
+        await connect();
+
+
+        alive = await isConnected();
+
+
+
+        if (!alive) {
+
+
+          print("Reconnect failed");
+
+
+          return;
+
+
+        }
+
       }
 
-      print("Size : ${await localFile.length()} bytes");
 
-      final fileName = localFile.uri.pathSegments.last;
 
-      print("Remote Name : $fileName");
+      final fileName =
+          localFile.uri.pathSegments.last;
 
-      print("Creating remote file...");
+
+
+      print("Uploading $fileName");
+
+
 
       final remoteFile =
-          await smb!.createFile("/Shared/$fileName");
+          await smb!.createFile(
 
-      print("Remote file created.");
+            "/Shared/$fileName",
 
-      print("Opening writer...");
+          );
 
-      final writer = await smb!.openWrite(remoteFile);
 
-      print("Writing...");
 
-      await writer.addStream(localFile.openRead());
+      final writer =
+          await smb!.openWrite(remoteFile);
 
-      print("Flush...");
+
+
+      await writer.addStream(
+        localFile.openRead(),
+      );
+
+
 
       await writer.flush();
 
-      print("Close...");
 
       await writer.close();
 
-      print("UPLOAD SUCCESS");
+
+
+      print("Upload completed: $fileName");
+
+
 
       setState(() {
-        status = "Uploaded : $fileName";
-      });
-    } catch (e, s) {
-      print("UPLOAD FAILED");
-      print(e);
-      print(s);
 
-      setState(() {
-        status = "Upload Failed";
+        status = "Uploaded: $fileName";
+
       });
+
+
+
+    } catch(e, stack) {
+
+
+      print("Upload error: $e");
+
+      print(stack);
+
+
+
+      smb = null;
+
+
+
+      print("Retrying after reconnect...");
+
+
+
+      await Future.delayed(
+        const Duration(seconds: 3),
+      );
+
+
+
+      await connect();
+
+
+
+      if (smb != null) {
+
+        await uploadFile(localFile);
+
+      }
+
+
     }
+
+
   }
+
+
+
+
+
 
   Future<void> createTestFile() async {
-    final file = File("/storage/emulated/0/Download/test.txt");
+
+
+    final file =
+        File("/storage/emulated/0/Download/test.txt");
+
+
 
     await file.writeAsString(
-      "Hello from Flutter\n${DateTime.now()}",
+
+      "Hello from Flutter\n"
+      "${DateTime.now()}",
+
     );
 
-    print("Created : ${file.path}");
 
-    print(await file.exists());
+    print("Created test file");
+
   }
+
+
+
+
+
+
 
   @override
   Widget build(BuildContext context) {
+
+
     return Scaffold(
+
+
       appBar: AppBar(
-        title: const Text("SMB Upload Test"),
+
+        title: const Text("SMB Auto Upload"),
+
       ),
+
+
+
       body: Center(
+
+
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+
+
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+
           children: [
+
+
+
             Text(status),
+
+
 
             const SizedBox(height: 20),
 
-            ElevatedButton(
-              onPressed: connect,
-              child: const Text("Connect"),
-            ),
+
 
             ElevatedButton(
-              onPressed: createTestFile,
-              child: const Text("Create Test File"),
+
+              onPressed: connect,
+
+              child:
+                  const Text("Connect SMB"),
+
             ),
+
+
+
+
+            ElevatedButton(
+
+              onPressed: createTestFile,
+
+              child:
+                  const Text("Create Test File"),
+
+            ),
+
+
+
           ],
+
         ),
+
+
       ),
+
+
     );
+
+
   }
+
 }
